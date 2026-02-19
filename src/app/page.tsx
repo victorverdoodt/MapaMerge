@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic';
 import Sidebar from '@/components/Sidebar';
 import { useFiscalData } from '@/hooks/useFiscalData';
+import { useOptimizer } from '@/hooks/useOptimizer';
 
 // Dynamic import to avoid SSR issues with MapLibre (uses window/document)
 const DualMapView = dynamic(() => import('@/components/DualMapView'), {
@@ -19,6 +20,12 @@ const DualMapView = dynamic(() => import('@/components/DualMapView'), {
 
 export default function Home() {
   const { originalTopojson, mergedTopojson, mergeResults, globalStats, loading, error } = useFiscalData();
+  const optimizer = useOptimizer(originalTopojson);
+
+  // Use dynamic results from optimizer if available, otherwise static data
+  const effectiveStats = optimizer.result?.stats ?? globalStats;
+  const effectiveMergeResults = optimizer.result?.mergeResults ?? mergeResults;
+  const effectiveMergedGeo = optimizer.result?.mergedGeoJSON ?? null;
 
   return (
     <div className="h-screen flex flex-col font-[family-name:var(--font-geist-sans)]">
@@ -69,12 +76,21 @@ export default function Home() {
         <DualMapView
           originalTopojson={originalTopojson}
           mergedTopojson={mergedTopojson}
-          mergeResults={mergeResults}
-          globalStats={globalStats}
+          mergedGeoJSON={effectiveMergedGeo}
+          mergeResults={effectiveMergeResults}
+          globalStats={effectiveStats}
         />
 
         {/* Sidebar */}
-        <Sidebar stats={globalStats} loading={loading} />
+        <Sidebar
+          stats={effectiveStats}
+          loading={loading}
+          onOptimize={optimizer.optimize}
+          computing={optimizer.computing}
+          optimizerReady={optimizer.ready}
+          optimizerError={optimizer.error}
+          onReset={optimizer.reset}
+        />
       </div>
     </div>
   );

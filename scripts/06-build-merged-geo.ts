@@ -28,7 +28,11 @@ interface MergeGroup {
   efa: number;
   saldo: number;
   economia: number;
+  economiaLiquida?: number;
+  perdaFPM?: number;
+  custoTransicao?: number;
   saldoOtimizado: number;
+  areaKm2?: number;
 }
 
 interface FiscalEntry {
@@ -39,7 +43,10 @@ interface FiscalEntry {
   receita: number;
   despesa: number;
   despesaPessoal: number;
+  despesaAdmin?: number;
   receitaPropria: number;
+  receitaTransferencias?: number;
+  fpm?: number;
   saldo: number;
   dadosIndisponiveis: boolean;
 }
@@ -148,10 +155,14 @@ async function main() {
         saldoPerCapita: group.populacao > 0 ? Math.round(group.saldoOtimizado / group.populacao) : 0,
         efa: Math.round(group.efa * 100),
         economia: group.economia,
+        economiaLiquida: group.economiaLiquida ?? group.economia,
+        perdaFPM: group.perdaFPM ?? 0,
+        custoTransicao: group.custoTransicao ?? 0,
         saldoOtimizado: group.saldoOtimizado,
         isMerged: true,
         membersCount: group.members.length,
         memberCodes: group.members.join(','),
+        areaKm2: group.areaKm2 ?? 0,
       },
       geometry: mergedGeometry,
     });

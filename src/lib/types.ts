@@ -11,7 +11,10 @@ export interface MunicipalityData {
   receita: number;        // Receita Total
   despesa: number;        // Despesa Total
   despesaPessoal: number; // Despesa com Pessoal e Encargos Sociais
-  receitaPropria: number; // Receitas tributárias próprias (ISS, IPTU, ITBI, etc.)
+  despesaAdmin?: number;  // Despesa com Administração (função 04)
+  receitaPropria: number; // Receitas próprias (tributária + patrimonial + serviços)
+  receitaTransferencias?: number;
+  fpm?: number;           // FPM recebido
   /** Esforço Fiscal de Arrecadação = receitaPropria / receita */
   efa: number;
   /** Saldo = receita - despesa */
@@ -35,10 +38,39 @@ export interface MergeGroup {
   receitaPropria: number;
   efa: number;
   saldo: number;
-  /** Estimated savings from the merger */
+  /** Gross estimated savings from the merger */
   economia: number;
-  /** Saldo after accounting for economies */
+  /** Net savings (after FPM loss and transition costs) */
+  economiaLiquida: number;
+  /** Annual FPM loss from coefficient change (negative = loss) */
+  perdaFPM: number;
+  /** Annualized transition cost */
+  custoTransicao: number;
+  /** Saldo after accounting for net economies */
   saldoOtimizado: number;
+  /** Total area in km² */
+  areaKm2?: number;
+}
+
+/** Optimization parameters */
+export interface OptimizationParams {
+  personnelSavingsRate: number;
+  adminSavingsRate: number;
+  adminCostEstimate: number;
+  useRealAdminCosts: boolean;
+  transitionCostPerCapita: number;
+  amortizationYears: number;
+  modelFPM: boolean;
+  maxPopulation: number;
+  maxMembers: number;
+  minSavingsThreshold: number;
+  minPopulationTrigger: number;
+  maxAreaKm2: number;
+  maxCentroidDistanceKm: number;
+  algorithm: 'greedy' | 'annealing';
+  saIterations: number;
+  saInitialTemp: number;
+  saCoolingRate: number;
 }
 
 /** Stats for a single state */
@@ -49,6 +81,9 @@ export interface StateStats {
   municipiosResultante: number;
   reducaoPercent: number;
   economiaTotal: number;
+  economiaLiquida: number;
+  perdaFPM: number;
+  custoTransicao: number;
   efaAntes: number;
   efaDepois: number;
   deficitAntes: number;
@@ -62,6 +97,9 @@ export interface GlobalStats {
   municipiosEliminados: number;
   reducaoPercent: number;
   economiaTotal: number;
+  economiaLiquida: number;
+  perdaFPMTotal: number;
+  custoTransicaoTotal: number;
   economiaPorHabitante: number;
   efaAntes: number;
   efaDepois: number;
@@ -80,8 +118,10 @@ export interface GlobalStats {
     municipiosResultante: number;
     reducaoPercent: number;
     economiaTotal: number;
+    economiaLiquida: number;
   }[];
   byState: StateStats[];
+  params?: Partial<OptimizationParams>;
 }
 
 /** Merge results file structure */

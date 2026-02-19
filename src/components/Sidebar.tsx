@@ -1,12 +1,18 @@
 import { formatBRLAbbrev, formatNumber, formatPercent } from '@/lib/format';
-import type { GlobalStats } from '@/lib/types';
+import type { GlobalStats, OptimizationParams } from '@/lib/types';
+import ParameterPanel from './ParameterPanel';
 
 interface SidebarProps {
   stats: GlobalStats | null;
   loading?: boolean;
+  onOptimize?: (params: OptimizationParams) => void;
+  computing?: boolean;
+  optimizerReady?: boolean;
+  optimizerError?: string | null;
+  onReset?: () => void;
 }
 
-export default function Sidebar({ stats, loading }: SidebarProps) {
+export default function Sidebar({ stats, loading, onOptimize, computing, optimizerReady, optimizerError, onReset }: SidebarProps) {
   if (loading || !stats) {
     return (
       <aside className="w-80 flex-shrink-0 bg-gray-900/85 backdrop-blur-xl border-l border-gray-800 p-4 overflow-y-auto">
@@ -21,6 +27,17 @@ export default function Sidebar({ stats, loading }: SidebarProps) {
 
   return (
     <aside className="w-80 flex-shrink-0 bg-gray-900/85 backdrop-blur-xl border-l border-gray-800 overflow-y-auto custom-scrollbar">
+      {/* Parameter Panel */}
+      {onOptimize && (
+        <ParameterPanel
+          onOptimize={onOptimize}
+          computing={computing ?? false}
+          ready={optimizerReady ?? false}
+          error={optimizerError}
+          onReset={onReset}
+        />
+      )}
+
       {/* Header */}
       <div className="p-4 border-b border-gray-800">
         <h2 className="text-lg font-bold text-white">
@@ -32,14 +49,36 @@ export default function Sidebar({ stats, loading }: SidebarProps) {
       </div>
 
       <div className="p-4 space-y-3">
-        {/* Economy total */}
+        {/* Net Economy — headline metric */}
         <StatCard
           icon="💰"
-          label="Economia Total Estimada"
-          value={formatBRLAbbrev(stats.economiaTotal)}
+          label="Economia Líquida Anual"
+          value={formatBRLAbbrev(stats.economiaLiquida ?? stats.economiaTotal)}
           accent="emerald"
           sublabel={`${formatBRLAbbrev(stats.economiaPorHabitante)}/habitante`}
         />
+
+        {/* Economy breakdown (gross, FPM loss, transition cost) */}
+        {((stats.perdaFPMTotal ?? 0) !== 0 || (stats.custoTransicaoTotal ?? 0) !== 0) && (
+          <div className="bg-gray-800/30 rounded-lg p-2.5 border border-gray-700/30 space-y-1">
+            <div className="flex justify-between text-[11px]">
+              <span className="text-gray-500">Economia bruta</span>
+              <span className="text-emerald-400/80">{formatBRLAbbrev(stats.economiaTotal)}</span>
+            </div>
+            {(stats.perdaFPMTotal ?? 0) !== 0 && (
+              <div className="flex justify-between text-[11px]">
+                <span className="text-gray-500">Perda FPM</span>
+                <span className="text-red-400/80">−{formatBRLAbbrev(Math.abs(stats.perdaFPMTotal ?? 0))}</span>
+              </div>
+            )}
+            {(stats.custoTransicaoTotal ?? 0) !== 0 && (
+              <div className="flex justify-between text-[11px]">
+                <span className="text-gray-500">Custo transição/ano</span>
+                <span className="text-red-400/80">−{formatBRLAbbrev(stats.custoTransicaoTotal ?? 0)}</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Municipality reduction */}
         <StatCard

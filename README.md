@@ -1,6 +1,6 @@
 # 🗺️ Simulador de Fusões Municipais Otimizadas
 
-Simulação hipotética de fusões municipais em todo o Brasil, com visualização em mapa dual (antes vs. depois) e indicadores fiscais consolidados.
+Simulação hipotética de fusões municipais em todo o Brasil, com visualização em mapa dual (antes vs. depois), indicadores fiscais consolidados e **otimizador interativo no navegador** com sliders de parâmetros.
 
 > **Aviso:** Este projeto tem caráter **educacional e exploratório**. Não representa proposta oficial nem cenário juridicamente viável sem plebiscito e legislação específica (PEC 188/2019).
 
@@ -12,12 +12,39 @@ O sistema exibe dois mapas sincronizados do Brasil lado a lado:
 
 | Mapa Esquerdo | Mapa Direito |
 |---|---|
-| Divisão municipal **original** (~5.570 municípios) | Divisão **otimizada** após fusões (~1.700–1.800 municípios) |
+| Divisão municipal **original** (~5.570 municípios) | Divisão **otimizada** após fusões (~4.300 municípios, cenário moderado) |
 
 Cada polígono é colorido pelo **saldo fiscal per capita** (receita − despesa ÷ população):
 - 🔴 Vermelho = déficit severo (até −R$2.000/hab)
 - 🟡 Amarelo = equilíbrio (~R$0/hab)
 - 🟢 Verde = superávit (até +R$2.000/hab)
+
+### Otimizador Interativo
+
+O painel lateral "⚙️ Parâmetros da Simulação" permite recalcular fusões **em tempo real** direto no navegador (sem servidor). Inclui:
+
+- **3 cenários pré-configurados:** Conservador / Moderado / Agressivo
+- **Sliders** para todas as taxas (pessoal, admin, custo de transição, amortização, limites geográficos)
+- **Modelagem de FPM:** Checkbox para ligar/desligar o impacto no Fundo de Participação dos Municípios
+- **Botão "Recalcular":** Roda o algoritmo greedy (~300ms) e atualiza mapas + estatísticas instantaneamente
+
+---
+
+## Resultados da Simulação (cenário moderado)
+
+| Métrica | Antes | Depois |
+|---|---|---|
+| Municípios | 5.566 | 4.327 (−22,3%) |
+| Economia bruta (pessoal + admin) | — | R$ 20,1 B/ano |
+| Perda de FPM | — | −R$ 13,8 B/ano |
+| Custo de transição | — | −R$ 0,6 B/ano |
+| **Economia líquida** | — | **R$ 5,7 B/ano** |
+| Economia por habitante | — | R$ 26,64 |
+| EFA (Autossuficiência Fiscal) | 23,9% | 24,2% |
+| Déficit fiscal total | −R$ 50,7 B | −R$ 46,3 B (−8,7%) |
+| Desequilíbrio (σ saldo/capita) | 1.207 | 1.002 (−17,0%) |
+| Pop. média por ente | ~38 mil | ~49 mil |
+| Grupos de fusão | — | 995 |
 
 ---
 
@@ -30,6 +57,7 @@ Cada polígono é colorido pelo **saldo fiscal per capita** (receita − despesa
 | Estilo do Mapa Base | CARTO Dark Matter (gratuito, sem API key) |
 | Processamento Geográfico | TopoJSON (server/client/simplify), Turf.js |
 | Pipeline de Dados | TypeScript executado via `tsx` |
+| Otimização Client-side | Engine própria em TypeScript puro (sem dependência de Node.js) |
 | Estilização | Tailwind CSS 3.4, tema escuro |
 
 ---
@@ -38,36 +66,42 @@ Cada polígono é colorido pelo **saldo fiscal per capita** (receita − despesa
 
 ```
 MapaMerge/
-├── scripts/                    # Pipeline de dados offline (7 etapas)
-│   ├── 01-fetch-geojson.ts     # Baixa geometrias do IBGE
-│   ├── 02-fetch-fiscal.ts      # Baixa dados fiscais do SICONFI
+├── scripts/                        # Pipeline de dados offline (8 etapas)
+│   ├── 01-fetch-geojson.ts         # Baixa geometrias do IBGE
+│   ├── 02-fetch-fiscal.ts          # Baixa dados fiscais do SICONFI
 │   ├── 02-generate-synthetic-fiscal.ts  # (alternativa) Dados fiscais sintéticos
-│   ├── 03-build-topojson.ts    # Converte GeoJSON → TopoJSON
-│   ├── 04-build-adjacency.ts   # Monta grafo de adjacência
-│   ├── 05-optimize-merges.ts   # Algoritmo guloso de fusão
-│   ├── 06-build-merged-geo.ts  # Dissolve geometrias fundidas
-│   ├── 07-compute-stats.ts     # Calcula estatísticas globais
-│   └── data/                   # Cache intermediário (não versionado)
-├── public/data/                # Dados pré-processados consumidos pelo frontend
-│   ├── br-original.topojson    # Mapa original (~5 MB)
-│   ├── br-merged.topojson      # Mapa otimizado (~1 MB)
-│   ├── merge-results.json      # Grupos de fusão + dados fiscais
-│   └── global-stats.json       # Estatísticas nacionais para o sidebar
+│   ├── 02b-augment-fiscal.ts       # Estima FPM, despesaAdmin, transferências
+│   ├── 03-build-topojson.ts        # Converte GeoJSON → TopoJSON
+│   ├── 04-build-adjacency.ts       # Grafo de adjacência + dados geográficos
+│   ├── 05-optimize-merges.ts       # Greedy + Simulated Annealing
+│   ├── 06-build-merged-geo.ts      # Dissolve geometrias fundidas
+│   ├── 07-compute-stats.ts         # Stats globais + optimizer bundle
+│   └── data/                       # Cache intermediário (não versionado)
+├── public/data/                    # Dados consumidos pelo frontend
+│   ├── br-original.topojson        # Mapa original (~5 MB)
+│   ├── br-merged.topojson          # Mapa otimizado (~2 MB)
+│   ├── merge-results.json          # Grupos de fusão + dados fiscais
+│   ├── global-stats.json           # Estatísticas nacionais para o sidebar
+│   └── optimizer-bundle.json       # Bundle p/ otimização client-side (~3 MB)
 ├── src/
-│   ├── app/                    # Páginas Next.js (layout, page, globals.css)
-│   ├── components/             # Componentes React
-│   │   ├── DualMapView.tsx     # Mapas sincronizados (viewState compartilhado)
-│   │   ├── Sidebar.tsx         # Painel lateral com estatísticas
-│   │   ├── Tooltip.tsx         # Tooltip ao passar o mouse sobre municípios
-│   │   ├── Legend.tsx          # Legenda de cores
-│   │   └── StateFilter.tsx    # Filtro por estado com flyTo
+│   ├── app/                        # Páginas Next.js (layout, page, globals.css)
+│   ├── components/
+│   │   ├── DualMapView.tsx         # Mapas sincronizados (viewState compartilhado)
+│   │   ├── ParameterPanel.tsx      # Painel de sliders para otimização interativa
+│   │   ├── Sidebar.tsx             # Painel lateral com estatísticas
+│   │   ├── Tooltip.tsx             # Tooltip ao passar o mouse sobre municípios
+│   │   ├── Legend.tsx              # Legenda de cores
+│   │   └── StateFilter.tsx         # Filtro por estado com flyTo
 │   ├── hooks/
-│   │   └── useFiscalData.ts   # Hook para carregamento paralelo dos dados
+│   │   ├── useFiscalData.ts        # Carregamento paralelo dos dados estáticos
+│   │   └── useOptimizer.ts         # Hook de otimização client-side
 │   └── lib/
-│       ├── types.ts           # Interfaces TypeScript
-│       ├── colors.ts          # Escalas de cor choropleth (MapLibre expressions)
-│       └── format.ts          # Formatação brasileira (BRL, números, %)
-└── next.config.mjs            # Configuração: output estático
+│       ├── types.ts                # Interfaces TypeScript
+│       ├── optimizer-core.ts       # Engine de otimização (greedy, FPM, haversine)
+│       ├── buildMergedGeo.ts       # Dissolução de geometrias client-side
+│       ├── colors.ts               # Escalas de cor choropleth
+│       └── format.ts               # Formatação brasileira (BRL, números, %)
+└── next.config.mjs                 # Configuração: output estático
 ```
 
 ---
@@ -93,12 +127,118 @@ MapaMerge/
 | **Outras Deduções** | `DCA-Anexo I-C` | `ReceitasExcetoIntraOrcamentarias` | `*Outras Dedu*` |
 | **Despesa Total** | `DCA-Anexo I-D` | `TotalDespesas` | `Despesas Liquidadas` |
 | **Despesa c/ Pessoal** | `DCA-Anexo I-D` | `DO3.1.00.00.00.00` | `Despesas Liquidadas` |
+| **Despesa Administrativa** | `DCA-Anexo I-D` | `FO04` (função 04) | `Despesas Liquidadas` |
 | **Receita Tributária** | `DCA-Anexo I-C` | `RO1.1.0.0.00.0.0` | `Receitas Brutas Realizadas` |
+| **Receita Patrimonial** | `DCA-Anexo I-C` | `RO1.2.0.0.00.0.0` | `Receitas Brutas Realizadas` |
+| **Receita de Serviços** | `DCA-Anexo I-C` | `RO1.3.0.0.00.0.0` | `Receitas Brutas Realizadas` |
+| **Transferências** | `DCA-Anexo I-C` | `RO1.7.0.0.00.0.0` | `Receitas Brutas Realizadas` |
+| **FPM** | `DCA-Anexo I-C` | `RO1.7.1.1.51.0.0` | `Receitas Brutas Realizadas` |
 
 - **Receita Líquida** = Receita Bruta − |Deduções FUNDEB| − |Outras Deduções|
+- **Receita Própria** = Tributária + Patrimonial + Serviços
 - **Anos tentados:** 2024 → 2023 → 2022 (o mais recente disponível)
 - **Rate limit:** 1 requisição por segundo (~93 min para todos os municípios)
 - **Cache incremental:** Cada município é salvo em `scripts/data/fiscal-cache/{codIbge}.json`, permitindo retomada em caso de falha
+- **Invalidação automática:** Cache que não contém os campos `fpm`, `despesaAdmin` e `receitaTransferencias` é re-baixado automaticamente
+
+### 3. Estimativa de FPM (script 02b)
+
+Quando dados reais de FPM não estão disponíveis no cache, o script `02b-augment-fiscal.ts` estima os valores usando o modelo oficial de distribuição:
+
+- **Pool nacional FPM Interior:** ~R$155 bilhões (2024)
+- **Pool nacional FPM Capitais:** ~R$19 bilhões (2024)
+- **Participação estadual:** Percentuais definidos no Anexo do DL 1.881/1981
+- **Distribuição per capita:** Dentro de cada estado, proporcional ao coeficiente FPM de cada município (ver tabela abaixo)
+
+---
+
+## Modelo Econômico da Fusão
+
+O modelo calcula a **economia líquida anual** de cada fusão, considerando três componentes:
+
+```
+economiaLíquida = economiaBruta + perdaFPM − custoTransição
+```
+
+### 1. Economia Bruta (Pessoal + Administrativa)
+
+Quando dois municípios adjacentes A e B são fundidos (onde B é o menor):
+
+```
+economiaPessoal = despesaPessoalB × taxaPessoal      (default: 20%)
+economiaAdmin   = despesaAdminB  × taxaAdmin         (default: 30%, usa dados reais de despesaAdmin quando disponível)
+economiaBruta   = economiaPessoal + economiaAdmin
+```
+
+Se `despesaAdmin` real não estiver disponível, é estimada como 15% da despesa total.
+
+A **penalidade por tamanho** aplica retornos decrescentes para entidades grandes:
+```
+penalidade = min(1, 500.000 ÷ populaçãoCombinada)
+```
+
+### 2. Modelagem do FPM (Fundo de Participação dos Municípios)
+
+O FPM é a principal transferência federal para municípios. Seu valor depende de um **coeficiente** baseado na faixa populacional (DL 1.881/1981, LC 91/1997):
+
+| Faixa Populacional | Coeficiente |
+|---|---|
+| Até 10.188 hab | 0,6 |
+| 10.189 – 13.584 | 0,8 |
+| 13.585 – 16.980 | 1,0 |
+| 16.981 – 23.772 | 1,2 |
+| 23.773 – 30.564 | 1,4 |
+| 30.565 – 37.356 | 1,6 |
+| 37.357 – 44.148 | 1,8 |
+| 44.149 – 50.940 | 2,0 |
+| 50.941 – 61.128 | 2,2 |
+| 61.129 – 71.316 | 2,4 |
+| 71.317 – 81.504 | 2,6 |
+| 81.505 – 91.692 | 2,8 |
+| 91.693 – 101.880 | 3,0 |
+| 101.881 – 115.464 | 3,2 |
+| 115.465 – 129.048 | 3,4 |
+| 129.049 – 142.632 | 3,6 |
+| 142.633 – 156.216 | 3,8 |
+| Acima de 156.216 | 4,0 |
+
+Quando dois municípios se fundem, a entidade resultante pode **cair de faixa FPM**, pois a soma dos coeficientes individuais é geralmente maior que o coeficiente da população combinada:
+
+```
+coefAntes  = coef(popA) + coef(popB)            # ex: 0,6 + 0,6 = 1,2
+coefDepois = coef(popA + popB)                   # ex: coef(18.000) = 1,0
+
+FPM_depois = FPM_antes × (coefDepois / coefAntes)
+perdaFPM   = FPM_depois − FPM_antes              # negativo = perda
+```
+
+**Exemplo prático:** Dois municípios de ~8.000 habitantes cada, recebendo R$10M de FPM cada (coef 0,6 cada). Após fusão: cidade de ~16.000 hab com coef 1,0. FPM total cai de R$20M para R$16,7M — perda de R$3,3M/ano.
+
+> A modelagem FPM é o principal fator que torna a simulação realista. Sem ela, fusões pareceriam irrealisticamente vantajosas. Com ela, municípios pequenos perdem muita receita FPM ao se fundirem, reduzindo drasticamente a atratividade da fusão.
+
+### 3. Custo de Transição
+
+Estima custos de integração de sistemas, realocação, harmonização administrativa:
+
+```
+custoTotal     = populaçãoMenorMunicípio × custoPerCapita    (default: R$200/hab)
+custoAnual     = custoTotal ÷ anosAmortização                (default: 7 anos)
+```
+
+### Restrições da Fusão
+
+O algoritmo **não** realizará uma fusão se qualquer restrição for violada:
+
+| Restrição | Valor Default | Justificativa |
+|---|---|---|
+| **População combinada** | ≤ 150.000 hab | Evita entes demasiado grandes |
+| **Membros por grupo** | ≤ 6 municípios | Limita complexidade de integração |
+| **Pop. mínima de gatilho** | Ao menos um < 50.000 | Não funde dois municípios médios/grandes |
+| **Economia mínima** | ≥ R$200.000/ano | Fusões triviais não compensam |
+| **Área combinada** | ≤ 15.000 km² | Evita entes com extensão territorial excessiva |
+| **Distância entre centroides** | ≤ 80 km | Garante proximidade geográfica |
+| **Adjacência geográfica** | Obrigatória | Municípios devem compartilhar fronteira |
+| **Mesmo estado** | Obrigatória | Fusões interestaduais não são modeladas |
 
 ---
 
@@ -110,50 +250,25 @@ MapaMerge/
 |---|---|
 | **Saldo Fiscal** | `receita − despesa` |
 | **Saldo per Capita** | `saldo ÷ população` |
-| **EFA** (Esforço Fiscal de Arrecadação) | `receitaTributária ÷ receitaLíquida` |
+| **EFA** (Esforço Fiscal de Arrecadação) | `receitaPrópria ÷ receitaTotal` |
 
-### Simulação de Economia por Fusão
-
-Quando dois municípios adjacentes A e B são fundidos (onde B é o menor):
-
-```
-economiaPessoal   = despesaPessoalB × 0.60      (60% do custo de pessoal do menor)
-economiaAdmin     = despesaB × 0.15 × 0.50      (50% de 15% do custo admin estimado)
-economiaTotal     = (economiaPessoal + economiaAdmin) × penalidade
-```
-
-A **penalidade por tamanho** reduz os ganhos para municípios grandes (retorno decrescente):
-```
-penalidade = min(1, 500.000 ÷ populaçãoCombinada)
-```
-
-### Restrições da Fusão
-
-O algoritmo **não** realizará uma fusão se:
-- População combinada > **150.000 habitantes**
-- Grupo resultante > **6 municípios**
-- Ambos os municípios já têm população > **50.000** (ao menos um deve ser pequeno)
-- Economia estimada < **R$500.000**
-- Os municípios **não são adjacentes** geograficamente
-- Pertencem a **estados diferentes** (fusões são por estado)
+> **EFA** agora usa `receitaPrópria` (tributária + patrimonial + serviços) em vez de apenas receita tributária, oferecendo uma medida mais ampla de autossuficiência.
 
 ### Estatísticas Globais (Sidebar)
 
-O painel lateral exibe 6 cards + ranking de estados. Cada indicador é explicado abaixo:
+O painel lateral exibe 6 cards + ranking de estados:
 
-#### 💰 Economia Total Estimada
-
-A economia estimada é a **soma de todas as economias individuais de cada grupo de fusão**. Para cada grupo, a economia vem da eliminação parcial de custos do município menor absorvido:
+#### 💰 Economia Líquida Anual
 
 ```
-economiaGrupo = Σ (economiaPessoal + economiaAdmin) × penalidade
-              para cada fusão realizada dentro do grupo
-
-economiaTotal = Σ economiaGrupo  (todos os grupos de todos os estados)
-economiaPorHabitante = economiaTotal ÷ populaçãoTotalBrasil
+economiaLíquida = economiaBruta + perdaFPM − custoTransição
+economiaPorHabitante = economiaLíquida ÷ populaçãoTotalBrasil
 ```
 
-**Interpretação:** Se todas as fusões propostas fossem realizadas, o país economizaria esse valor anualmente em custos de pessoal e administrativos redundantes. O value por habitante mostra quanto essa economia representa dividida por toda a população.
+Com breakdown detalhado:
+- **Economia bruta:** Soma das economias de pessoal e administrativas
+- **Perda FPM:** Soma das perdas de FPM por mudança de coeficiente
+- **Custo transição/ano:** Custo de integração anualizado
 
 ---
 
@@ -165,54 +280,41 @@ reducaoPercent       = municipiosEliminados ÷ municipiosOriginal × 100
 ```
 
 - **municipiosOriginal:** total de municípios com dados fiscais disponíveis
-- **municipiosResultante:** nº de grupos de fusão + nº de municípios que ficaram sem fusão (isolados ou que já são grandes)
-
-**Interpretação:** Quantos entes municipais deixariam de existir como unidades administrativas independentes.
+- **municipiosResultante:** nº de grupos de fusão + nº de municípios que ficaram sem fusão
 
 ---
 
 #### 📉 Déficit Fiscal
 
-O déficit fiscal mede o volume total de **saldos negativos** (municípios que gastam mais do que arrecadam):
-
 ```
 déficitAntes  = Σ saldo   (para todo município onde saldo < 0)
-              onde saldo = receita − despesa
 
 déficitDepois = Σ saldoOtimizado   (para toda entidade pós-fusão onde saldoOtimizado < 0)
-              onde saldoOtimizado = receita − (despesa − economia)
+              onde saldoOtimizado = saldo + economiaLíquida
 
-reducaoDeficit = (déficitAntes − déficitDepois) ÷ |déficitAntes| × 100
+reducaoDeficit = (|déficitAntes| − |déficitDepois|) ÷ |déficitAntes| × 100
 ```
 
-Para as **entidades resultantes de fusão**, o saldo otimizado desconta a economia estimada da despesa — simulando que a fusão reduz gastos. Para **municípios sem fusão**, o saldo permanece inalterado.
-
-**Interpretação:** Se o déficit era −R$50 bi e caiu para −R$35 bi, a simulação sugere que 30% do déficit agregado seria eliminado pelas economias de escala. Isto não significa que as entidades deficitárias se tornam superavitárias necessariamente — apenas que o saldo negativo total é menor.
+O saldo otimizado usa a fórmula `saldo + economiaLíquida` (que já inclui economia bruta, perda FPM e custo de transição), evitando dupla contagem.
 
 ---
 
 #### ⚖️ Desequilíbrio Fiscal
 
-Mede a **dispersão** entre os saldos fiscais per capita dos entes, usando o desvio padrão populacional (σ):
+Desvio padrão populacional (σ) dos saldos fiscais per capita:
 
 ```
 Antes:
-  saldoPerCapitaᵢ = saldoᵢ ÷ populaçãoᵢ          (para cada município i)
-  μ = média(saldoPerCapita)
+  saldoPerCapitaᵢ = saldoᵢ ÷ populaçãoᵢ
   σ_antes = √[ Σ(saldoPerCapitaᵢ − μ)² ÷ N ]
 
 Depois:
-  Para grupos de fusão:   saldoPerCapitaⱼ = (receitaⱼ − (despesaⱼ − economiaⱼ)) ÷ populaçãoⱼ
-  Para municípios soltos:  saldoPerCapitaⱼ = saldoⱼ ÷ populaçãoⱼ
-  μ' = média(saldoPerCapita')
+  Para fusões:          saldoPerCapitaⱼ = (saldoⱼ + economiaLíquidaⱼ) ÷ populaçãoⱼ
+  Para municípios soltos: saldoPerCapitaⱼ = saldoⱼ ÷ populaçãoⱼ
   σ_depois = √[ Σ(saldoPerCapitaⱼ − μ')² ÷ N' ]
 
 reducaoDesequilibrio = (σ_antes − σ_depois) ÷ σ_antes × 100
 ```
-
-**Interpretação:** Um σ alto significa que há muita desigualdade — alguns municípios estão com superávit muito maior que outros enquanto muitos estão em déficit profundo. Se σ diminui após as fusões, os entes resultantes ficam mais "parecidos" fiscalmente entre si. Se σ aumenta, as fusões concentraram riqueza em alguns entes enquanto outros continuaram deficitários.
-
-> O desequilíbrio pode **aumentar** após fusões porque municípios superavitários às vezes absorvem vizinhos deficitários, criando entidades com saldo per capita mais extremo (muito positivo ou muito negativo).
 
 ---
 
@@ -222,58 +324,90 @@ reducaoDesequilibrio = (σ_antes − σ_depois) ÷ σ_antes × 100
 popMediaPorEnte = populaçãoTotal ÷ municípiosResultantes
 ```
 
-**Sublabel:** Mostra quantos **grupos de fusão** foram criados (entidades com 2+ municípios fundidos).
-
-**Interpretação:** Antes das fusões o Brasil tem ~5.570 municípios com média de ~38 mil habitantes. Após a simulação, a média sobe para ~120 mil/ente, refletindo entidades maiores e potencialmente com mais escala administrativa.
-
 ---
 
 #### 🎯 Autossuficiência Fiscal (EFA)
 
-O **Esforço Fiscal de Arrecadação** mede quanto da receita total de um ente vem de receitas tributárias próprias (ISS, IPTU, ITBI, etc.), não de transferências:
-
 ```
-EFA_antes  = Σ receitaTributária (todos os municípios) ÷ Σ receitaTotal (todos)
-EFA_depois = Σ receitaTributária (todos os entes pós-fusão) ÷ Σ receitaTotal (todos)
+EFA_antes  = Σ receitaPrópria ÷ Σ receitaTotal     (todos os municípios)
+EFA_depois = Σ receitaPrópria ÷ Σ receitaTotal'    (receita ajustada por perda FPM)
 ```
 
-**Interpretação:** Um EFA de 24% significa que apenas 24% da receita municipal brasileira vem de fontes próprias — o restante são transferências (FPM, ICMS, etc.). A fusão por si só não altera o EFA agregado (as receitas tributárias totais não mudam), mas a expectativa teórica é que entes maiores consigam aumentar sua base tributária ao longo do tempo.
-
-> O EFA "antes" e "depois" aparece igual no agregado nacional porque a fusão redistribui mas não cria novas receitas tributárias. A diferença apareceria ao nível de cada ente se compararmos EFA individual.
+A EFA pós-fusão **melhora ligeiramente** porque a perda de FPM reduz o denominador (receita total diminui com menos transferências), enquanto receitas próprias permanecem iguais.
 
 ---
 
 #### 🏆 Top Estados por Economia
 
-Ranking dos 5 estados com maior economia total estimada, mostrando:
-- **UF** e nome do estado
-- Transição de municípios (ex: `853→268`)
-- Economia estimada em R$ (ex: `R$ 15,0 B`)
+Ranking dos 5 estados com maior **economia líquida** estimada (já descontando FPM e transição).
 
 ---
 
 ## Algoritmo de Otimização
 
-O script `05-optimize-merges.ts` usa um **algoritmo guloso (greedy)** executado **por estado**:
+O script `05-optimize-merges.ts` usa um **algoritmo Greedy + Simulated Annealing** executado **por estado**:
 
-### Etapas
+### Fase 1 — Greedy (solução inicial)
 
 1. **Inicialização:** Cada município com dados fiscais disponíveis vira um "nó" no grafo
-2. **Grafo de adjacência:** Construído via `topojson.neighbors()` no passo 04 — dois municípios são vizinhos se compartilham uma fronteira
-3. **Fila de prioridade:** Para cada par de vizinhos, calcula-se a economia potencial. Os pares são ordenados por economia decrescente
+2. **Grafo de adjacência:** Construído via `topojson.neighbors()` no passo 04. Complementado com **dados geográficos** (área em km² e centroide via Turf.js)
+3. **Fila de prioridade:** Para cada par de vizinhos, calcula economia líquida (bruta + FPM + transição). Ordenados por economia decrescente
 4. **Loop guloso:**
-   - Retira o par de maior economia da fila
-   - Se ambos os nós ainda estão ativos e respeitam as restrições → efetua a fusão
-   - O nó maior absorve o menor (soma fiscal, transfere adjacências)
-   - Recalcula a economia para as novas adjacências do nó expandido
-   - Repete até não haver mais pares viáveis
-5. **Resultado:** Lista de grupos de fusão + municípios sem alteração
+   - Retira o par de maior economia líquida
+   - Valida restrições (pop, área, distância, membros)
+   - Efetua fusão: nó maior absorve menor; centroide recalculado (ponderado por área)
+   - Recalcula economia para novas adjacências
+   - Repete até não haver pares viáveis
+
+### Fase 2 — Simulated Annealing (refinamento)
+
+Após o greedy, aplica perturbações estocásticas para escapar de ótimos locais:
+
+| Parâmetro | Valor |
+|---|---|
+| Iterações | 10.000 × min(N/50, 1) |
+| Temperatura inicial | 500.000 × (N/500) |
+| Cooling rate | 0,9995 |
+
+**Movimentos:**
+- Desfazer uma fusão (split)
+- Mover município de um grupo para vizinho
+
+Aceita movimentos ruins com probabilidade `e^(−Δ/T)`, onde Δ é a perda de economia e T é a temperatura decrescente.
+
+### Otimização Client-side
+
+O mesmo algoritmo greedy roda no **navegador** via `src/lib/optimizer-core.ts`:
+
+- **Sem dependências de Node.js:** Haversine puro substitui Turf.js; dados pré-computados substituem leitura de arquivos
+- **Double-rAF pattern:** Garante que o indicador "Recalculando..." renderiza antes do cálculo bloquear a thread
+- **~300ms** para processar todos os 27 estados do Brasil
+- **Geometrias recalculadas:** `topojson.merge()` dissolve polígonos dos grupos no client
 
 ### Complexidade
 
-- Para cada estado: O(E log E) onde E = número de arestas de adjacência
-- Média de 5.7 vizinhos por município → ~16.000 arestas no total
-- Execução total: < 1 segundo para os 27 estados
+- Greedy: O(E log E) por estado, onde E = arestas de adjacência (~16.000 total)
+- SA: O(iterações × validações) — ~5.000–10.000 iterações por estado grande
+- Total pipeline: ~30 segundos para os 27 estados (greedy + SA)
+- Total client-side: ~300ms (apenas greedy, sem SA)
+
+---
+
+## Cenários Pré-configurados
+
+O otimizador interativo oferece 3 presets:
+
+| Parâmetro | Conservador | Moderado | Agressivo |
+|---|---|---|---|
+| Economia pessoal | 10% | 20% | 35% |
+| Economia admin | 20% | 30% | 45% |
+| Custo transição/hab | R$300 | R$200 | R$100 |
+| Amortização | 10 anos | 7 anos | 5 anos |
+| Modelar FPM | ✅ Sim | ✅ Sim | ❌ Não |
+| Pop. máxima | 100k | 150k | 250k |
+| Membros máx | 4 | 6 | 8 |
+| Área máxima | 10.000 km² | 15.000 km² | 25.000 km² |
+| Distância máx | 60 km | 80 km | 120 km |
 
 ---
 
@@ -299,45 +433,49 @@ O pipeline precisa ser executado uma vez para gerar os dados pré-processados em
 #### Opção A — Pipeline completo com dados reais (~4 horas)
 
 ```bash
-# Executa todos os 7 scripts em sequência
+# Executa todos os scripts em sequência
 npm run pipeline
 ```
 
-⚠️ O passo 02 (SICONFI) leva aproximadamente **3-4 horas** por conta do rate limit da API (1 req/s × 5.570 municípios × até 3 tentativas de anos).
+⚠️ O passo 02 (SICONFI) leva aproximadamente **93 minutos** por conta do rate limit da API (1 req/s × 5.570 municípios).
 
-O download é **incremental** — se interromper, ao rodar novamente ele retoma de onde parou (cache em `scripts/data/fiscal-cache/`).
+O download é **incremental** — se interromper, ao rodar novamente ele retoma de onde parou (cache em `scripts/data/fiscal-cache/`). Cache que não possui campos novos (`fpm`, `despesaAdmin`, `receitaTransferencias`) é invalidado e re-baixado automaticamente.
 
-#### Opção B — Pipeline rápido com dados sintéticos (~2 min)
+#### Opção B — Pipeline rápido com dados estimados (~5 min)
 
 ```bash
 # 1. Baixar geometrias do IBGE (~30s)
 npm run pipeline:geo
 
-# 2. Gerar dados ficais sintéticos (instantâneo)
+# 2. Gerar dados fiscais sintéticos (instantâneo)
 npx tsx scripts/02-generate-synthetic-fiscal.ts
 
-# 3. Processar tudo (topojson + adjacência + fusões + mapas + stats)
+# 3. Estimar FPM, despesaAdmin, transferências (instantâneo)
+npx tsx scripts/02b-augment-fiscal.ts
+
+# 4. Processar tudo (topojson + adjacência + fusões + mapas + stats)
 npm run pipeline:process
 ```
 
-Os dados sintéticos usam distribuições realistas (lognormal para população, razões reais para receita/despesa) mas **não representam valores reais** dos municípios.
+Os dados sintéticos usam distribuições realistas, e o script 02b estima FPM via modelo de coeficientes e participação estadual. Para dados reais, rode `02-fetch-fiscal.ts` no lugar dos passos 2 e 3.
 
 #### Opção C — Executar scripts individuais
 
 ```bash
 npx tsx scripts/01-fetch-geojson.ts       # Geometrias IBGE
-npx tsx scripts/02-fetch-fiscal.ts        # Dados SICONFI (lento)
+npx tsx scripts/02-fetch-fiscal.ts        # Dados SICONFI (lento, ~93 min)
+npx tsx scripts/02b-augment-fiscal.ts     # Estimar campos ausentes (FPM etc.)
 npx tsx scripts/03-build-topojson.ts      # GeoJSON → TopoJSON
-npx tsx scripts/04-build-adjacency.ts     # Grafo de adjacência
-npx tsx scripts/05-optimize-merges.ts     # Algoritmo de fusão
+npx tsx scripts/04-build-adjacency.ts     # Grafo de adjacência + geodados
+npx tsx scripts/05-optimize-merges.ts     # Greedy + Simulated Annealing
 npx tsx scripts/06-build-merged-geo.ts    # Geometrias dissolvidas
-npx tsx scripts/07-compute-stats.ts       # Estatísticas globais
+npx tsx scripts/07-compute-stats.ts       # Stats + optimizer bundle
 ```
 
 #### Atalhos de re-execução
 
 ```bash
-# Reprocessar apenas fusões + mapas + stats (após ajustar parâmetros do algoritmo)
+# Reprocessar apenas fusões + mapas + stats (após ajustar parâmetros)
 npm run pipeline:merge
 
 # Reprocessar tudo exceto downloads (topojson → adjacência → fusão → mapas → stats)
@@ -365,9 +503,10 @@ Após o pipeline, os seguintes arquivos estarão em `public/data/`:
 | Arquivo | Tamanho | Conteúdo |
 |---|---|---|
 | `br-original.topojson` | ~5 MB | TopoJSON dos ~5.570 municípios originais com propriedades fiscais |
-| `br-merged.topojson` | ~1 MB | TopoJSON dos municípios pós-fusão (~1.700–1.800 polígonos) |
-| `merge-results.json` | ~500 KB | Lista de todos os grupos de fusão, membros, dados fiscais e economias |
-| `global-stats.json` | ~15 KB | Estatísticas nacionais e ranking de estados para o sidebar |
+| `br-merged.topojson` | ~2 MB | TopoJSON dos municípios pós-fusão (~4.300 polígonos) |
+| `merge-results.json` | ~500 KB | Grupos de fusão, membros, dados fiscais, economias e perdas FPM |
+| `global-stats.json` | ~15 KB | Estatísticas nacionais, ranking de estados, parâmetros usados |
+| `optimizer-bundle.json` | ~3 MB | Dados fiscais + adjacência + geodados para otimização client-side |
 
 Dados intermediários (não versionados) ficam em `scripts/data/`:
 
@@ -375,28 +514,43 @@ Dados intermediários (não versionados) ficam em `scripts/data/`:
 |---|---|
 | `br-raw.geojson` | GeoJSON cru do IBGE |
 | `municipios-nomes.json` | Nomes + UF de todos os municípios |
-| `fiscal-raw.json` | Dados fiscais consolidados de todos os municípios |
+| `fiscal-raw.json` | Dados fiscais consolidados (todos os campos: fpm, despesaAdmin, etc.) |
 | `fiscal-cache/` | Cache individual por município (para retomada incremental) |
 | `br-municipalities.topojson` | TopoJSON intermediário |
 | `adjacency.json` | Grafo de adjacência (codIbge → [vizinhos]) |
+| `municipality-geo.json` | Área (km²) e centroide por município (via Turf.js) |
 
 ---
 
 ## Ajustando Parâmetros da Simulação
 
-Os parâmetros do algoritmo de fusão estão no início de `scripts/05-optimize-merges.ts`:
+### Via Interface Web (interativo)
 
-```typescript
-const PERSONNEL_SAVINGS_RATE = 0.60;  // % de economia no pessoal do menor município
-const ADMIN_SAVINGS_RATE = 0.50;      // % de economia administrativa
-const ADMIN_COST_ESTIMATE = 0.15;     // Custo admin estimado como % da despesa total
-const MAX_POPULATION = 150_000;       // Pop. máxima do grupo fundido
-const MAX_MEMBERS = 6;                // Máximo de membros por grupo
-const MIN_SAVINGS_THRESHOLD = 500_000; // Economia mínima (R$) para justificar fusão
-const MIN_POPULATION_TRIGGER = 50_000; // Ao menos um município deve ter pop < este valor
+Abra o painel "⚙️ Parâmetros da Simulação" no sidebar e ajuste os sliders. Clique em "🔄 Recalcular" para ver os resultados instantaneamente. Os parâmetros disponíveis:
+
+| Parâmetro | Range | Default |
+|---|---|---|
+| Economia de pessoal | 5%–60% | 20% |
+| Economia administrativa | 5%–50% | 30% |
+| Custo de transição/hab | R$0–R$500 | R$200 |
+| Amortização | 3–15 anos | 7 anos |
+| Modelar FPM | Liga/Desliga | Liga |
+| População máxima | 50k–500k | 150k |
+| Membros máx | 2–10 | 6 |
+| Área máxima | 5k–50k km² | 15k km² |
+| Distância máx centroides | 20–200 km | 80 km |
+
+### Via Pipeline (offline)
+
+Os parâmetros do pipeline estão no início de `scripts/05-optimize-merges.ts`. Após alterar, recalcule:
+
+```bash
+npx tsx scripts/05-optimize-merges.ts
+npx tsx scripts/06-build-merged-geo.ts
+npx tsx scripts/07-compute-stats.ts
 ```
 
-Após alterar, recalcule:
+Ou use o atalho:
 
 ```bash
 npm run pipeline:merge
@@ -406,11 +560,31 @@ npm run pipeline:merge
 
 ## Limitações
 
-- As estimativas de economia são **simplificações** — na prática, economias de escala e custos de transição variam por contexto
+### Do Modelo Econômico
+- As taxas de economia (20% pessoal, 30% admin) são **estimativas médias** — na prática variam por município, tipo de serviço e capacidade de integração
+- Custos de transição reais podem ser significativamente maiores (integração de sistemas, TI, renegociação de contratos, eleições)
+- Não modela ganhos de longo prazo (melhoria de base tributária, economia de escala em compras)
+- Não modela perdas políticas e sociais (distância da sede, perda de identidade local)
+
+### Do Modelo FPM
+- A estimativa de FPM usa o modelo de coeficientes do DL 1.881/1981 com distribuição proporcional dentro de cada estado — os valores exatos dependem de atualizações anuais do TCU
+- Capitais estaduais usam pool separado de FPM (distribuído por população), mas o modelo simplifica a fórmula
+- Não modela efeitos de segunda ordem: quando um município perde FPM, outros do mesmo estado poderiam ganhar (soma zero estadual)
+
+### Dos Dados
 - Dados de 2023/2024 podem estar indisponíveis para alguns municípios (marcados como "dados indisponíveis")
-- A adjacência é puramente geográfica (baseada em fronteiras do IBGE) — não considera rodovias, distância ou vínculos econômicos
+- Quando dados reais de FPM não estão no cache, são estimados pelo modelo de coeficientes (script 02b)
+- `despesaAdmin` e `receitaTransferencias` são estimadas quando ausentes no cache
+
+### Da Modelagem Geográfica
+- A adjacência é baseada em fronteiras do IBGE — não considera rodovias, rios ou barreiras naturais
+- Distância de centroides é uma aproximação (Haversine) — não mede acessibilidade real
+- Áreas são calculadas via projeção plana (Turf.js `area()`) — leve imprecisão para polígonos próximos ao equador
 - Fusões são restritas a **dentro do mesmo estado** (sem fusões interestaduais)
-- A visualização usa qualidade "mínima" do IBGE para performance; polígonos podem parecer simplificados
+
+### Da Visualização
+- Qualidade "mínima" do IBGE para performance — polígonos podem parecer simplificados
+- O site é **totalmente estático** (`output: 'export'`) — toda otimização roda no navegador do usuário
 
 ---
 

@@ -22,6 +22,7 @@ const INITIAL_VIEW: MapViewState = {
 interface DualMapViewProps {
   originalTopojson: Topology | null;
   mergedTopojson: Topology | null;
+  mergedGeoJSON?: GeoJSON.FeatureCollection | null;
   mergeResults: MergeResults | null;
   globalStats: GlobalStats | null;
 }
@@ -29,6 +30,7 @@ interface DualMapViewProps {
 export default function DualMapView({
   originalTopojson,
   mergedTopojson,
+  mergedGeoJSON: mergedGeoJSONProp,
   mergeResults,
   globalStats,
 }: DualMapViewProps) {
@@ -51,6 +53,9 @@ export default function DualMapView({
   }, [originalTopojson]);
 
   const mergedGeoJSON = useMemo(() => {
+    // Prefer dynamic GeoJSON from optimizer if available
+    if (mergedGeoJSONProp) return mergedGeoJSONProp;
+    // Fall back to static TopoJSON
     if (!mergedTopojson) return null;
     try {
       return topojsonClient.feature(mergedTopojson, mergedTopojson.objects.municipalities) as GeoJSON.FeatureCollection;
@@ -58,7 +63,7 @@ export default function DualMapView({
       console.error('Error converting merged TopoJSON:', e);
       return null;
     }
-  }, [mergedTopojson]);
+  }, [mergedGeoJSONProp, mergedTopojson]);
 
   // Create merge lookup: codIbge → group info
   const mergeLookup = useMemo((): Record<string, MergeGroup> => {

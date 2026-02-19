@@ -54,7 +54,10 @@ interface FiscalData {
   receita: number;
   despesa: number;
   despesaPessoal: number;
-  receitaPropria: number;
+  despesaAdmin: number;      // Despesa com Administração (função 04)
+  receitaPropria: number;    // Broader: tributária + patrimonial + serviços + outras correntes
+  receitaTransferencias: number; // Total transfers received
+  fpm: number;               // FPM (Fundo de Participação dos Municípios)
   efa: number;
   saldo: number;
   ano: number;
@@ -110,8 +113,34 @@ function extractFiscalFromDCA(items: DCAItem[], codIbge: string, nome: string, u
   // Despesa com Pessoal e Encargos Sociais — Anexo I-D, "DO3.1.00.00.00.00", "Despesas Liquidadas"
   const despesaPessoal = findValue('DO3.1.00.00.00.00', 'I-D', 'Despesas Liquidadas');
 
+  // Despesa com Administração (função 04) — Anexo I-D, "FO04", "Despesas Liquidadas"
+  const despesaAdmin = findValue('FO04', 'I-D', 'Despesas Liquidadas');
+
   // Receita Tributária (Impostos, Taxas e Contribuições de Melhoria) — Anexo I-C, "RO1.1.0.0.00.0.0"
-  const receitaPropria = findValue('RO1.1.0.0.00.0.0', 'I-C', 'Receitas Brutas Realizadas');
+  const receitaTributaria = findValue('RO1.1.0.0.00.0.0', 'I-C', 'Receitas Brutas Realizadas');
+
+  // Receita Patrimonial — Anexo I-C, "RO1.2.0.0.00.0.0"
+  const receitaPatrimonial = findValue('RO1.2.0.0.00.0.0', 'I-C', 'Receitas Brutas Realizadas');
+
+  // Receita de Serviços — Anexo I-C, "RO1.3.0.0.00.0.0"
+  const receitaServicos = findValue('RO1.3.0.0.00.0.0', 'I-C', 'Receitas Brutas Realizadas');
+
+  // Broader own-source revenue: tributária + patrimonial + serviços
+  const receitaPropria = receitaTributaria + receitaPatrimonial + receitaServicos;
+
+  // Receita de Transferências Correntes — Anexo I-C, "RO1.7.0.0.00.0.0"
+  const receitaTransferencias = findValue('RO1.7.0.0.00.0.0', 'I-C', 'Receitas Brutas Realizadas');
+
+  // FPM (Fundo de Participação dos Municípios) — Anexo I-C
+  // Account code: RO1.7.1.1.51.0.0 = total FPM (mensal + extraordinária)
+  // Sub-codes: RO1.7.1.1.51.1.0 = Cota Mensal, RO1.7.1.1.51.2.0 = Cotas Extraordinárias
+  let fpm = findValue('RO1.7.1.1.51.0.0', 'I-C', 'Receitas Brutas Realizadas');
+  if (fpm === 0) {
+    // Fallback: sum sub-codes if aggregate not present
+    const fpmMensal = findValue('RO1.7.1.1.51.1.0', 'I-C', 'Receitas Brutas Realizadas');
+    const fpmExtra = findValue('RO1.7.1.1.51.2.0', 'I-C', 'Receitas Brutas Realizadas');
+    fpm = fpmMensal + fpmExtra;
+  }
 
   // Use gross revenue if net is negative or zero (deduction issue)
   const receitaFinal = receita > 0 ? receita : receitaBruta;
@@ -127,7 +156,10 @@ function extractFiscalFromDCA(items: DCAItem[], codIbge: string, nome: string, u
     receita: receitaFinal,
     despesa,
     despesaPessoal,
+    despesaAdmin,
     receitaPropria,
+    receitaTransferencias,
+    fpm,
     efa,
     saldo,
     ano,
@@ -157,7 +189,10 @@ async function fetchMunicipio(codIbge: string, nome: string, uf: string, populac
     receita: 0,
     despesa: 0,
     despesaPessoal: 0,
+    despesaAdmin: 0,
     receitaPropria: 0,
+    receitaTransferencias: 0,
+    fpm: 0,
     efa: 0,
     saldo: 0,
     ano: 0,
@@ -211,11 +246,15 @@ async function main() {
     const codIbge = String(m.cod_ibge);
     const cacheFile = getCacheFile(codIbge);
 
-    // Check cache
+    // Check cache — invalidate if missing new fields (fpm, receitaTransferencias, despesaAdmin)
     if (fs.existsSync(cacheFile)) {
-      results[codIbge] = JSON.parse(fs.readFileSync(cacheFile, 'utf-8'));
-      cached++;
-      continue;
+      const cachedData = JSON.parse(fs.readFileSync(cacheFile, 'utf-8'));
+      if ('fpm' in cachedData && 'receitaTransferencias' in cachedData && 'despesaAdmin' in cachedData) {
+        results[codIbge] = cachedData;
+        cached++;
+        continue;
+      }
+      // Cache is stale (missing new fields) — re-fetch
     }
 
     // Fetch from API
@@ -248,7 +287,10 @@ async function main() {
         receita: 0,
         despesa: 0,
         despesaPessoal: 0,
+        despesaAdmin: 0,
         receitaPropria: 0,
+        receitaTransferencias: 0,
+        fpm: 0,
         efa: 0,
         saldo: 0,
         ano: 0,
