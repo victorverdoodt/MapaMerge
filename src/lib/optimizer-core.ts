@@ -217,8 +217,8 @@ function calculateNetSavings(
   const dist = haversineKm(a.centroid, b.centroid);
   if (dist > params.maxCentroidDistanceKm) return 0;
 
-  // Determine smaller / larger
-  const [smaller, _larger] = a.populacao <= b.populacao ? [a, b] : [b, a];
+  // Determine smaller
+  const smaller = a.populacao <= b.populacao ? a : b;
 
   // Admin savings
   let adminCosts: number;
