@@ -1,5 +1,7 @@
 # 🗺️ Simulador de Fusões Municipais Otimizadas
 
+[![GitHub](https://img.shields.io/badge/GitHub-victorverdoodt%2FMapaMerge-181717?logo=github)](https://github.com/victorverdoodt/MapaMerge)
+
 Simulação hipotética de fusões municipais em todo o Brasil, com visualização em mapa dual (antes vs. depois), indicadores fiscais consolidados e **otimizador interativo no navegador** com sliders de parâmetros.
 
 > **Aviso:** Este projeto tem caráter **educacional e exploratório**. Não representa proposta oficial nem cenário juridicamente viável sem plebiscito e legislação específica (PEC 188/2019).
