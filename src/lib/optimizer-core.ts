@@ -218,7 +218,7 @@ function calculateNetSavings(
   if (dist > params.maxCentroidDistanceKm) return 0;
 
   // Determine smaller / larger
-  const [smaller, larger] = a.populacao <= b.populacao ? [a, b] : [b, a];
+  const [smaller, _larger] = a.populacao <= b.populacao ? [a, b] : [b, a];
 
   // Admin savings
   let adminCosts: number;
@@ -304,7 +304,7 @@ function optimizeStateGreedy(
   }
 
   // Build initial savings queue
-  let savingsQueue: SavingsEntry[] = [];
+  const savingsQueue: SavingsEntry[] = [];
   const processed = new Set<string>();
 
   for (const [codA, neighbors] of Array.from(stateAdj.entries())) {
