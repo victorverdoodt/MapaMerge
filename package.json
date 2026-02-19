@@ -6,21 +6,38 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "pipeline": "tsx scripts/01-fetch-geojson.ts && tsx scripts/02-fetch-fiscal.ts && tsx scripts/03-build-topojson.ts && tsx scripts/04-build-adjacency.ts && tsx scripts/05-optimize-merges.ts && tsx scripts/06-build-merged-geo.ts && tsx scripts/07-compute-stats.ts",
+    "pipeline:geo": "tsx scripts/01-fetch-geojson.ts",
+    "pipeline:fiscal": "tsx scripts/02-fetch-fiscal.ts",
+    "pipeline:process": "tsx scripts/03-build-topojson.ts && tsx scripts/04-build-adjacency.ts && tsx scripts/05-optimize-merges.ts && tsx scripts/06-build-merged-geo.ts && tsx scripts/07-compute-stats.ts",
+    "pipeline:merge": "tsx scripts/05-optimize-merges.ts && tsx scripts/06-build-merged-geo.ts && tsx scripts/07-compute-stats.ts"
   },
   "dependencies": {
+    "@turf/turf": "^7.3.4",
+    "maplibre-gl": "^5.18.0",
+    "next": "14.2.35",
+    "papaparse": "^5.5.3",
     "react": "^18",
     "react-dom": "^18",
-    "next": "14.2.35"
+    "react-map-gl": "^8.1.0",
+    "topojson-client": "^3.1.0",
+    "topojson-server": "^3.0.1",
+    "topojson-simplify": "^3.0.3"
   },
   "devDependencies": {
-    "typescript": "^5",
     "@types/node": "^20",
+    "@types/papaparse": "^5.5.2",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "@types/topojson-client": "^3.1.5",
+    "@types/topojson-server": "^3.0.4",
+    "@types/topojson-simplify": "^3.0.3",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.35",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
-    "eslint": "^8",
-    "eslint-config-next": "14.2.35"
+    "tsx": "^4.21.0",
+    "typescript": "^5"
   }
 }
