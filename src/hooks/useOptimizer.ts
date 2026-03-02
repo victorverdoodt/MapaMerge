@@ -46,8 +46,8 @@ interface UseOptimizerReturn {
 /**
  * Hook that manages client-side optimization.
  * 
- * 1. Loads optimizer bundle (fiscal + adjacency + geo) from /data/optimizer-bundle.json
- * 2. When optimize() is called, runs greedy optimizer on main thread
+ * 1. Lazy-loads optimizer bundle on first optimize() call (not on mount)
+ * 2. Runs greedy optimizer on main thread
  * 3. Builds merged GeoJSON from results + original topology
  * 4. Returns results for display
  * 
@@ -57,14 +57,21 @@ export function useOptimizer(originalTopojson: Topology | null): UseOptimizerRet
   const [bundle, setBundle] = useState<OptimizerBundle | null>(null);
   const [result, setResult] = useState<OptimizerResult | null>(null);
   const [computing, setComputing] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const rafRef = useRef<number>(0);
+  const bundlePromiseRef = useRef<Promise<OptimizerBundle | null> | null>(null);
 
-  // Load optimizer bundle on mount
-  useEffect(() => {
-    let cancelled = false;
+  // Lazy-load optimizer bundle — called on first optimize()
+  const loadBundle = useCallback(async (): Promise<OptimizerBundle | null> => {
+    // Return cached bundle if already loaded
+    if (bundle) return bundle;
 
-    async function load() {
+    // Deduplicate concurrent fetches
+    if (bundlePromiseRef.current) return bundlePromiseRef.current;
+
+    setLoading(true);
+    const promise = (async () => {
       try {
         const res = await fetch('/data/optimizer-bundle.json');
         if (!res.ok) {
@@ -73,28 +80,35 @@ export function useOptimizer(originalTopojson: Topology | null): UseOptimizerRet
           } else {
             setError(`Erro ao carregar dados: HTTP ${res.status}`);
           }
-          return;
+          return null;
         }
-        const data = await res.json();
-        if (!cancelled) {
-          setBundle(data);
-        }
+        const data: OptimizerBundle = await res.json();
+        setBundle(data);
+        return data;
       } catch (err) {
-        if (!cancelled) {
-          setError(`Erro ao carregar dados de otimização: ${(err as Error).message}`);
-        }
+        setError(`Erro ao carregar dados de otimização: ${(err as Error).message}`);
+        return null;
+      } finally {
+        setLoading(false);
+        bundlePromiseRef.current = null;
       }
-    }
+    })();
 
-    load();
-    return () => { cancelled = true; };
-  }, []);
+    bundlePromiseRef.current = promise;
+    return promise;
+  }, [bundle]);
 
-  // Run optimization
-  const optimize = useCallback((params: OptimizationParams) => {
-    if (!bundle || !originalTopojson) return;
+  // Run optimization — loads bundle on demand
+  const optimize = useCallback(async (params: OptimizationParams) => {
+    if (!originalTopojson) return;
 
     setComputing(true);
+
+    const loadedBundle = await loadBundle();
+    if (!loadedBundle) {
+      setComputing(false);
+      return;
+    }
 
     // Double-rAF: ensure the "computing" state renders before we block
     cancelAnimationFrame(rafRef.current);
@@ -105,9 +119,9 @@ export function useOptimizer(originalTopojson: Topology | null): UseOptimizerRet
 
           // Run optimization (greedy ~300-500ms for all of Brazil)
           const mergeResultsRaw = runOptimization(
-            bundle.fiscal,
-            bundle.adjacency,
-            bundle.geo,
+            loadedBundle.fiscal,
+            loadedBundle.adjacency,
+            loadedBundle.geo,
             { ...DEFAULT_PARAMS, ...params }
           );
 
@@ -116,7 +130,7 @@ export function useOptimizer(originalTopojson: Topology | null): UseOptimizerRet
             originalTopojson,
             mergeResultsRaw.groups,
             mergeResultsRaw.ungrouped,
-            bundle.fiscal,
+            loadedBundle.fiscal,
           );
 
           const elapsed = performance.now() - t0;
@@ -135,7 +149,7 @@ export function useOptimizer(originalTopojson: Topology | null): UseOptimizerRet
         }
       });
     });
-  }, [bundle, originalTopojson]);
+  }, [loadBundle, originalTopojson]);
 
   // Reset to static data
   const reset = useCallback(() => {
@@ -148,8 +162,8 @@ export function useOptimizer(originalTopojson: Topology | null): UseOptimizerRet
   }, []);
 
   return {
-    ready: bundle !== null && originalTopojson !== null,
-    computing,
+    ready: originalTopojson !== null,
+    computing: computing || loading,
     result,
     optimize,
     reset,

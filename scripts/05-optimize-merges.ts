@@ -10,6 +10,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as turf from '@turf/turf';
+import { getCoefFPM, UF_NAMES } from '../src/lib/constants';
+import type { OptimizationParams } from '../src/lib/types';
 
 const DATA_DIR = path.join(__dirname, 'data');
 const PUBLIC_DIR = path.join(__dirname, '..', 'public', 'data');
@@ -18,98 +20,26 @@ const ADJACENCY_FILE = path.join(DATA_DIR, 'adjacency.json');
 const GEO_FILE = path.join(DATA_DIR, 'municipality-geo.json');
 const OUTPUT_FILE = path.join(PUBLIC_DIR, 'merge-results.json');
 
-// ============================================================
-// Model Parameters — calibrated from international merger studies
-// (Allers & Geertsema 2016, Blesse & Baskaran 2016, Miyazaki 2014)
-// ============================================================
-export interface OptimizationParams {
-  // Savings rates
-  personnelSavingsRate: number;   // Fraction of smaller's personnel costs saved (10-30%)
-  adminSavingsRate: number;       // Fraction of admin overhead saved (20-40%)
-  adminCostEstimate: number;      // Admin costs as % of despesa (fallback if no real data)
-  useRealAdminCosts: boolean;     // Use DCA function 04 data when available
-
-  // Transition costs
-  transitionCostPerCapita: number; // One-time cost per capita (R$) for merger integration
-  amortizationYears: number;       // Years over which to amortize transition costs
-
-  // FPM modeling
-  modelFPM: boolean;               // Whether to model FPM coefficient changes
-
-  // Merge constraints
-  maxPopulation: number;           // Hard cap on merged entity population
-  maxMembers: number;              // Max municipalities per merged group
-  minSavingsThreshold: number;     // Min net annual savings (R$) to justify a merge
-  minPopulationTrigger: number;    // Only merge if at least one node has pop below this
-
-  // Geographic constraints
-  maxAreaKm2: number;              // Max total area of merged entity (km²)
-  maxCentroidDistanceKm: number;   // Max distance between centroids (km)
-
-  // Algorithm
-  algorithm: 'greedy' | 'annealing';
-  saIterations: number;            // SA: max iterations
-  saInitialTemp: number;           // SA: initial temperature
-  saCoolingRate: number;           // SA: geometric cooling factor
-}
-
-// Default parameters: "Moderate" scenario
-export const DEFAULT_PARAMS: OptimizationParams = {
-  personnelSavingsRate: 0.20,       // 20% — conservative estimate
-  adminSavingsRate: 0.30,           // 30% of admin overhead
-  adminCostEstimate: 0.15,          // 15% fallback
+// Script-specific override: SA defaults for offline pipeline
+const SCRIPT_DEFAULT_PARAMS: OptimizationParams = {
+  personnelSavingsRate: 0.20,
+  adminSavingsRate: 0.30,
+  adminCostEstimate: 0.15,
   useRealAdminCosts: true,
-
-  transitionCostPerCapita: 200,     // R$200/hab one-time
-  amortizationYears: 7,             // 7-year amortization
-
+  transitionCostPerCapita: 200,
+  amortizationYears: 7,
   modelFPM: true,
-
   maxPopulation: 150_000,
   maxMembers: 6,
-  minSavingsThreshold: 200_000,     // R$200k (lowered because savings are now realistic)
+  minSavingsThreshold: 200_000,
   minPopulationTrigger: 50_000,
-
   maxAreaKm2: 15_000,
   maxCentroidDistanceKm: 80,
-
   algorithm: 'annealing',
   saIterations: 50_000,
   saInitialTemp: 5_000_000,
   saCoolingRate: 0.9997,
 };
-
-// ============================================================
-// FPM Coefficient Table (DL 1.881/1981, LC 91/1997)
-// For interior municipalities only (capitals use a different formula)
-// ============================================================
-const FPM_BRACKETS: { maxPop: number; coef: number }[] = [
-  { maxPop: 10188, coef: 0.6 },
-  { maxPop: 13584, coef: 0.8 },
-  { maxPop: 16980, coef: 1.0 },
-  { maxPop: 23772, coef: 1.2 },
-  { maxPop: 30564, coef: 1.4 },
-  { maxPop: 37356, coef: 1.6 },
-  { maxPop: 44148, coef: 1.8 },
-  { maxPop: 50940, coef: 2.0 },
-  { maxPop: 61128, coef: 2.2 },
-  { maxPop: 71316, coef: 2.4 },
-  { maxPop: 81504, coef: 2.6 },
-  { maxPop: 91692, coef: 2.8 },
-  { maxPop: 101880, coef: 3.0 },
-  { maxPop: 115464, coef: 3.2 },
-  { maxPop: 129048, coef: 3.4 },
-  { maxPop: 142632, coef: 3.6 },
-  { maxPop: 156216, coef: 3.8 },
-  { maxPop: Infinity, coef: 4.0 },
-];
-
-export function getCoefFPM(populacao: number): number {
-  for (const bracket of FPM_BRACKETS) {
-    if (populacao <= bracket.maxPop) return bracket.coef;
-  }
-  return 4.0;
-}
 
 /**
  * Estimate FPM change when merging municipalities.
@@ -766,7 +696,7 @@ async function main() {
   }
 
   // Load params from env or use defaults
-  const params: OptimizationParams = { ...DEFAULT_PARAMS };
+  const params: OptimizationParams = { ...SCRIPT_DEFAULT_PARAMS };
   console.log('Parameters:');
   console.log(`  Personnel savings rate: ${(params.personnelSavingsRate * 100).toFixed(0)}%`);
   console.log(`  Admin savings rate: ${(params.adminSavingsRate * 100).toFixed(0)}%`);
@@ -829,16 +759,6 @@ async function main() {
     deficitDepois: number;
   }
   const stateResults: StateResult[] = [];
-
-  const UF_NAMES: Record<string, string> = {
-    AC: 'Acre', AL: 'Alagoas', AP: 'Amapá', AM: 'Amazonas',
-    BA: 'Bahia', CE: 'Ceará', DF: 'Distrito Federal', ES: 'Espírito Santo',
-    GO: 'Goiás', MA: 'Maranhão', MT: 'Mato Grosso', MS: 'Mato Grosso do Sul',
-    MG: 'Minas Gerais', PA: 'Pará', PB: 'Paraíba', PR: 'Paraná',
-    PE: 'Pernambuco', PI: 'Piauí', RJ: 'Rio de Janeiro', RN: 'Rio Grande do Norte',
-    RS: 'Rio Grande do Sul', RO: 'Rondônia', RR: 'Roraima', SC: 'Santa Catarina',
-    SP: 'São Paulo', SE: 'Sergipe', TO: 'Tocantins',
-  };
 
   const optimizeFn = params.algorithm === 'annealing' ? optimizeStateSA : optimizeStateGreedy;
 

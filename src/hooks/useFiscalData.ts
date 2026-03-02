@@ -32,13 +32,11 @@ export function useFiscalData(): FiscalDataState {
 
     async function loadData() {
       try {
-        const basePath = process.env.NODE_ENV === 'production' ? '' : '';
-
         const [originalRes, mergedRes, mergeRes, statsRes] = await Promise.all([
-          fetch(`${basePath}/data/br-original.topojson`),
-          fetch(`${basePath}/data/br-merged.topojson`),
-          fetch(`${basePath}/data/merge-results.json`),
-          fetch(`${basePath}/data/global-stats.json`),
+          fetch('/data/br-original.topojson'),
+          fetch('/data/br-merged.topojson'),
+          fetch('/data/merge-results.json'),
+          fetch('/data/global-stats.json'),
         ]);
 
         if (cancelled) return;

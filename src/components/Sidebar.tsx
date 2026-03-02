@@ -10,23 +10,45 @@ interface SidebarProps {
   optimizerReady?: boolean;
   optimizerError?: string | null;
   onReset?: () => void;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
-export default function Sidebar({ stats, loading, onOptimize, computing, optimizerReady, optimizerError, onReset }: SidebarProps) {
+export default function Sidebar({ stats, loading, onOptimize, computing, optimizerReady, optimizerError, onReset, isOpen, onClose }: SidebarProps) {
+  // Mobile drawer wrapper
+  const drawerClasses = `
+    fixed inset-y-0 right-0 z-40 w-80 transform transition-transform duration-300 ease-in-out
+    lg:relative lg:translate-x-0 lg:z-auto
+    ${isOpen ? 'translate-x-0' : 'translate-x-full'}
+  `;
+
   if (loading || !stats) {
     return (
-      <aside className="w-80 flex-shrink-0 bg-gray-900/85 backdrop-blur-xl border-l border-gray-800 p-4 overflow-y-auto">
-        <div className="space-y-4 animate-pulse">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-20 bg-gray-800/50 rounded-lg" />
-          ))}
-        </div>
-      </aside>
+      <>
+        {isOpen && <div className="fixed inset-0 bg-black/50 z-30 lg:hidden" onClick={onClose} />}
+        <aside className={`${drawerClasses} flex-shrink-0 bg-gray-900/95 lg:bg-gray-900/85 backdrop-blur-xl border-l border-gray-800 p-4 overflow-y-auto`}>
+          {/* Mobile close button */}
+          <button onClick={onClose} className="lg:hidden absolute top-3 right-3 p-1 text-gray-400 hover:text-white" aria-label="Fechar painel">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+          <div className="space-y-4 animate-pulse">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="h-20 bg-gray-800/50 rounded-lg" />
+            ))}
+          </div>
+        </aside>
+      </>
     );
   }
 
   return (
-    <aside className="w-80 flex-shrink-0 bg-gray-900/85 backdrop-blur-xl border-l border-gray-800 overflow-y-auto custom-scrollbar">
+    <>
+      {isOpen && <div className="fixed inset-0 bg-black/50 z-30 lg:hidden" onClick={onClose} />}
+      <aside className={`${drawerClasses} flex-shrink-0 bg-gray-900/95 lg:bg-gray-900/85 backdrop-blur-xl border-l border-gray-800 overflow-y-auto custom-scrollbar`}>
+        {/* Mobile close button */}
+        <button onClick={onClose} className="lg:hidden absolute top-3 right-3 p-1 text-gray-400 hover:text-white z-10" aria-label="Fechar painel">
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
       {/* Parameter Panel */}
       {onOptimize && (
         <ParameterPanel
@@ -162,16 +184,17 @@ export default function Sidebar({ stats, loading, onOptimize, computing, optimiz
 
       {/* Footer */}
       <div className="p-4 border-t border-gray-800 mt-2">
-        <p className="text-[10px] text-gray-600 leading-relaxed">
+        <p className="text-[11px] text-gray-600 leading-relaxed">
           <strong className="text-gray-500">Fonte:</strong> Tesouro Nacional (SICONFI/FINBRA) e IBGE — Malhas Territoriais
         </p>
-        <p className="text-[10px] text-gray-600 mt-1.5 leading-relaxed">
+        <p className="text-[11px] text-gray-600 mt-1.5 leading-relaxed">
           <strong className="text-gray-500">Aviso:</strong> Simulação hipotética com caráter educacional e exploratório. 
           Não representa proposta oficial nem cenário juridicamente viável sem plebiscito e legislação específica 
           (PEC 188/2019).
         </p>
       </div>
     </aside>
+    </>
   );
 }
 
@@ -207,7 +230,7 @@ function StatCard({
     <div className={`${colors.bg} rounded-lg p-3 border ${colors.border}`}>
       <div className="flex items-center gap-2 mb-1">
         <span className="text-sm">{icon}</span>
-        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">
+        <span className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">
           {label}
         </span>
       </div>

@@ -7,7 +7,12 @@
  * Red = deficit, Yellow = neutral, Green = surplus.
  * Uses per-capita saldo for better comparability.
  */
-export function getFillColorExpression(property = 'saldoPerCapita'): unknown[] {
+// MapLibre expression type — `as never` is required by react-map-gl's strict
+// paint typing. This alias documents the intent and avoids raw `never` casts.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type MapExpression = any;
+
+export function getFillColorExpression(property = 'saldoPerCapita'): MapExpression {
   return [
     'interpolate',
     ['linear'],
@@ -27,7 +32,7 @@ export function getFillColorExpression(property = 'saldoPerCapita'): unknown[] {
 /**
  * Simple fill-color: red vs green based on saldo sign.
  */
-export function getSimpleFillColorExpression(property = 'saldo'): unknown[] {
+export function getSimpleFillColorExpression(property = 'saldo'): MapExpression {
   return [
     'case',
     ['<', ['get', property], 0],
@@ -39,7 +44,7 @@ export function getSimpleFillColorExpression(property = 'saldo'): unknown[] {
 /**
  * Hover highlight opacity expression using feature-state.
  */
-export function getHoverOpacityExpression(): unknown[] {
+export function getHoverOpacityExpression(): MapExpression {
   return [
     'case',
     ['boolean', ['feature-state', 'hover'], false],
@@ -55,7 +60,7 @@ export function getLineColorExpression(): string {
   return 'rgba(255, 255, 255, 0.15)';
 }
 
-export function getLineHoverColorExpression(): unknown[] {
+export function getLineHoverColorExpression(): MapExpression {
   return [
     'case',
     ['boolean', ['feature-state', 'hover'], false],

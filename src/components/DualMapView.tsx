@@ -5,7 +5,7 @@ import Map, { Source, Layer, MapLayerMouseEvent, MapRef } from 'react-map-gl/map
 import * as topojsonClient from 'topojson-client';
 import type { Topology } from 'topojson-specification';
 import type { MapViewState, TooltipInfo, MergeResults, MergeGroup, GlobalStats } from '@/lib/types';
-import { getFillColorExpression, getHoverOpacityExpression, getLineHoverColorExpression } from '@/lib/colors';
+import { getFillColorExpression, getHoverOpacityExpression, getLineHoverColorExpression, type MapExpression } from '@/lib/colors';
 import Tooltip from './Tooltip';
 import Legend from './Legend';
 import StateFilter from './StateFilter';
@@ -155,16 +155,42 @@ export default function DualMapView({
   }, []);
 
   // Feature state for hover highlighting
+  const prevHoveredRef = useRef<{ source: 'original' | 'merged'; id: string } | null>(null);
+
   useEffect(() => {
-    const maps = [
-      { ref: mapMergedRef, sourceLayer: 'merged' },
-      { ref: mapOriginalRef, sourceLayer: 'original' },
-    ];
-    for (const { ref } of maps) {
-      const map = ref.current?.getMap();
-      if (!map) continue;
-      // Clear all hover states would require tracking previous — skip for simplicity
+    const mapRefs = {
+      original: mapOriginalRef,
+      merged: mapMergedRef,
+    };
+
+    // Clear previous hover
+    const prev = prevHoveredRef.current;
+    if (prev) {
+      const map = mapRefs[prev.source].current?.getMap();
+      if (map) {
+        try {
+          map.setFeatureState(
+            { source: prev.source, id: prev.id },
+            { hover: false }
+          );
+        } catch { /* source may not exist yet */ }
+      }
     }
+
+    // Set new hover
+    if (hoveredId) {
+      const map = mapRefs[hoveredId.source].current?.getMap();
+      if (map) {
+        try {
+          map.setFeatureState(
+            { source: hoveredId.source, id: hoveredId.id },
+            { hover: true }
+          );
+        } catch { /* source may not exist yet */ }
+      }
+    }
+
+    prevHoveredRef.current = hoveredId;
   }, [hoveredId]);
 
   // Fly to state when selected
@@ -202,17 +228,17 @@ export default function DualMapView({
   return (
     <div className="relative flex-1 flex flex-col h-full">
       {/* Map labels */}
-      <div className="flex h-10 bg-gray-900/80 backdrop-blur border-b border-gray-800 z-10">
-        <div className="flex-1 flex items-center justify-center gap-2 border-r border-gray-800">
+      <div className="flex h-8 sm:h-10 bg-gray-900/80 backdrop-blur border-b border-gray-800 z-10">
+        <div className="flex-1 flex items-center justify-center gap-1 sm:gap-2 border-r border-gray-800">
           <div className="w-2 h-2 rounded-full bg-red-500" />
-          <span className="text-sm font-medium text-gray-300">
-            Original — 5.570 municípios
+          <span className="text-xs sm:text-sm font-medium text-gray-300">
+            Original — 5.570
           </span>
         </div>
-        <div className="flex-1 flex items-center justify-center gap-2">
+        <div className="flex-1 flex items-center justify-center gap-1 sm:gap-2">
           <div className="w-2 h-2 rounded-full bg-emerald-500" />
-          <span className="text-sm font-medium text-gray-300">
-            Otimizado — {numResultante} municípios
+          <span className="text-xs sm:text-sm font-medium text-gray-300">
+            Otimizado — {numResultante}
           </span>
         </div>
       </div>
@@ -244,15 +270,15 @@ export default function DualMapView({
                   id="choropleth-fill-original"
                   type="fill"
                   paint={{
-                    'fill-color': getFillColorExpression() as never,
-                    'fill-opacity': getHoverOpacityExpression() as never,
+                    'fill-color': getFillColorExpression() as MapExpression,
+                    'fill-opacity': getHoverOpacityExpression() as MapExpression,
                   }}
                 />
                 <Layer
                   id="choropleth-line-original"
                   type="line"
                   paint={{
-                    'line-color': getLineHoverColorExpression() as never,
+                    'line-color': getLineHoverColorExpression() as MapExpression,
                     'line-width': 0.5,
                   }}
                 />
@@ -282,21 +308,21 @@ export default function DualMapView({
                   id="choropleth-fill-merged"
                   type="fill"
                   paint={{
-                    'fill-color': getFillColorExpression() as never,
-                    'fill-opacity': getHoverOpacityExpression() as never,
+                    'fill-color': getFillColorExpression() as MapExpression,
+                    'fill-opacity': getHoverOpacityExpression() as MapExpression,
                   }}
                 />
                 <Layer
                   id="choropleth-line-merged"
                   type="line"
                   paint={{
-                    'line-color': getLineHoverColorExpression() as never,
+                    'line-color': getLineHoverColorExpression() as MapExpression,
                     'line-width': [
                       'case',
                       ['boolean', ['get', 'isMerged'], false],
                       1.5,
                       0.5,
-                    ] as never,
+                    ] as MapExpression,
                   }}
                 />
               </Source>
